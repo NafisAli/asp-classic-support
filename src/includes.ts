@@ -68,12 +68,12 @@ export function getImportedFiles(doc: TextDocument) : [string, IncludeFile][] {
 
     if (processedMatches.indexOf(match[1].toLowerCase())) {
 
-			const virtualIncludePath = match[1].startsWith(pathns.sep) ? match[1] : `/${match[1]}`;
+			const virtualIncludePath = match[1].startsWith(pathns.sep) ? match[1] : `${pathns.sep}${match[1]}`;
 			const docPath = pathns.dirname(doc.uri.path);
 			const directories = docPath.split(pathns.sep);
 
 			while (directories.length != 0) {
-				const path = pathns.normalize(`/${directories.join(pathns.sep)}${virtualIncludePath}`);
+				const path = pathns.normalize(`${directories.join(pathns.sep)}${virtualIncludePath}`);
 
 				if (fs.existsSync(path) && fs.statSync(path)?.isFile()) {
 
