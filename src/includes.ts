@@ -1,7 +1,6 @@
 import { TextDocument, Uri, workspace } from "vscode";
 import * as pathns from "path";
 import * as fs from "fs";
-import { virtualPaths } from "./extension";
 
 export class IncludeFile {
   constructor(path: string) {
@@ -69,35 +68,35 @@ export function getImportedFiles(doc: TextDocument) : [string, IncludeFile][] {
 
     if (processedMatches.indexOf(match[1].toLowerCase())) {
 
-			// TODO: get the real directory from virtualPaths
-      // Directory for the current doc
-			var myVirtualPath = virtualPaths.find(v => match[1].toLowerCase().includes(v.virtualPath.toLowerCase()));
+			const virtualIncludePath = match[1].startsWith('/') ? match[1] : `/${match[1]}`;
+			const docPath = pathns.dirname(doc.uri.path);
+			const directories = docPath.split('/');
 
-			if (!myVirtualPath) {
-				// TODO: show warning in console
-				return;
+			while (directories.length != 0) {
+				const path = pathns.normalize(`/${directories.join('/')}${virtualIncludePath}`);
+
+				if (fs.existsSync(path) && fs.statSync(path)?.isFile()) {
+
+					localIncludes.push([
+						`Import Statement ${virtualIncludePath}`,
+						new IncludeFile(path)
+					]);
+					break;
+
+				} else if (fs.existsSync(`${path }.vbs`) && fs.statSync(`${path }.vbs`)?.isFile()) {
+
+					localIncludes.push([
+						`Import Statement ${virtualIncludePath}`,
+						new IncludeFile(`${path}.vbs`)
+					]);
+					break;
+
+				}
+
+				directories.pop();
 			}
 
-			const path = match[1].replace(myVirtualPath.virtualPath, myVirtualPath.physicalPath);
-
-      if (fs.existsSync(path) && fs.statSync(path)?.isFile()) {
-
-        localIncludes.push([
-          `Import Statement ${match[1]}`,
-          new IncludeFile(path)
-        ]);
-
-      }
-      else if (fs.existsSync(`${path }.vbs`) && fs.statSync(`${path }.vbs`)?.isFile()) {
-
-        localIncludes.push([
-          `Import Statement ${match[1]}`,
-          new IncludeFile(`${path}.vbs`)
-        ]);
-
-      }
-
-      processedMatches.push(match[1].toLowerCase());
+      processedMatches.push(virtualIncludePath.toLowerCase());
     }
   }
 
