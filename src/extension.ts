@@ -6,7 +6,7 @@ import signatureProvider from "./signature";
 import definitionProvider from "./definition";
 import colorProvider from "./colorprovider";
 import { IncludeFile, includes } from "./includes";
-import { AspSymbol, VirtualPath } from "./types";
+import { AspSymbol } from "./types";
 import { addRegionHighlights } from "./highlight";
 import { createDocumentSnippet } from "./snippet";
 
@@ -14,8 +14,6 @@ export const output = window.createOutputChannel("ASP Classic");
 
 /** List of all built-in ASP symbols parsed once from source files. */
 export const builtInSymbols = new Set<AspSymbol>();
-
-export const virtualPaths: VirtualPath[] = [];
 
 export function activate(context: ExtensionContext): void {
 
@@ -75,16 +73,6 @@ export function activate(context: ExtensionContext): void {
 		includes.set("ObjectDefs", new IncludeFile(objectIncludesFile));
 
 		addRegionHighlights(context);
-
-		const aspConfig: any = workspace.getConfiguration("asp").get("virtualPaths");
-
-		for (const virtualPath in aspConfig) {
-			if (Object.prototype.hasOwnProperty.call(aspConfig, virtualPath)) {
-				const physicalPath = aspConfig[virtualPath];
-
-				virtualPaths.push({ virtualPath: virtualPath, physicalPath: physicalPath });
-			}
-		}
 
 		context.subscriptions.push(
 			hoverProvider,
