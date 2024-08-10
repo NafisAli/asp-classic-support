@@ -3,100 +3,102 @@ import * as pathns from "path";
 import * as fs from "fs";
 
 export class IncludeFile {
-	constructor(path: string) {
-		let path2 = path;
-		if (!pathns.isAbsolute(path2))
-			path2 = pathns.join(workspace.workspaceFolders[0].uri.fsPath, path2);
+  constructor(path: string) {
+    let path2 = path;
+    if (!pathns.isAbsolute(path2))
+      path2 = pathns.join(workspace.workspaceFolders[0].uri.fsPath, path2);
 
-		this.Uri = Uri.file(path2);
+    this.Uri = Uri.file(path2);
 
-		if (fs.existsSync(path2) && fs.statSync(path2).isFile())
-			this.Content = fs.readFileSync(path2).toString();
-	}
+    if (fs.existsSync(path2) && fs.statSync(path2).isFile())
+      this.Content = fs.readFileSync(path2).toString();
+  }
 
-	Content = "";
+  Content = "";
 
-	Uri: Uri;
+  Uri: Uri;
 }
 
 export const includes = new Map<string, IncludeFile>();
 
-/** Matches `<!-- #include file="myfile.asp" --> , `<!-- #include virtual="virtual-folder/myfile.asp" -->`*/
-export const includePattern =
-	/<!--(\s+)?#include(\s+)?(?<type>virtual|file)(\s+)?=(\s+)?\"(?<filename>.*?)\"(\s+)?-->/gis;
-// export const virtualInclude = /<!--\s*#include\s*virtual="(.*?)"\s*-->/ig
+/** Matches `<!-- #include file="myfile.asp" --> */
+export const includePattern = /<!--\s*#include\s*file="(.*?)"\s*-->/ig
+export const virtualInclude = /<!--\s*#include\s*virtual="(.*?)"\s*-->/ig
 
 /** Gets any included files in the given document. */
-export function getImportedFiles(doc: TextDocument): [string, IncludeFile][] {
-	const localIncludes = [];
-	const processedMatches = Array<string>();
+export function getImportedFiles(doc: TextDocument) : [string, IncludeFile][] {
+  const localIncludes = [];
+  const processedMatches = Array<string>();
 
-	let match: RegExpExecArray;
+  let match : RegExpExecArray;
 
-	// Loop through each included file
-	while ((match = includePattern.exec(doc.getText())) !== null) {
-		if (processedMatches.indexOf(match.groups?.filename.toLowerCase())) {
-			// Directory for the current doc
-			const currentDirectory = pathns.dirname(doc.fileName);
+  // Loop through each included file
+  while ((match = includePattern.exec(doc.getText())) !== null) {
 
-			// Handle include types
-			if (match.groups?.type === "file") {
-				// Handle `file` include type. Relative to current doc
+    if (processedMatches.indexOf(match[1].toLowerCase())) {
 
-				const filePath = pathns.resolve(
-					currentDirectory,
-					match.groups?.filename
-				);
+      // Directory for the current doc
+      const currentDirectory = pathns.dirname(doc.fileName);
 
-				if (checkFileExistence(filePath)) {
+      const path = pathns.resolve(currentDirectory, match[1]);
+
+      if (fs.existsSync(path) && fs.statSync(path)?.isFile()) {
+
+        localIncludes.push([
+          `Import Statement ${match[1]}`,
+          new IncludeFile(path)
+        ]);
+
+      }
+      else if (fs.existsSync(`${path }.vbs`) && fs.statSync(`${path }.vbs`)?.isFile()) {
+
+        localIncludes.push([
+          `Import Statement ${match[1]}`,
+          new IncludeFile(`${path}.vbs`)
+        ]);
+
+      }
+
+      processedMatches.push(match[1].toLowerCase());
+    }
+  }
+
+  // Loop through each virtual included file
+  while ((match = virtualInclude.exec(doc.getText())) !== null) {
+
+    if (processedMatches.indexOf(match[1].toLowerCase())) {
+
+			const virtualIncludePath = match[1].startsWith(pathns.sep) ? match[1] : `${pathns.sep}${match[1]}`;
+			const docPath = pathns.dirname(doc.uri.path);
+			const directories = docPath.split(pathns.sep);
+
+			while (directories.length != 0) {
+				const path = pathns.normalize(`${directories.join(pathns.sep)}${virtualIncludePath}`);
+
+				if (fs.existsSync(path) && fs.statSync(path)?.isFile()) {
+
 					localIncludes.push([
-						`Import Statement ${match.groups?.filename}`,
-						new IncludeFile(filePath),
+						`Import Statement ${virtualIncludePath}`,
+						new IncludeFile(path)
 					]);
+					break;
+
+				} else if (fs.existsSync(`${path }.vbs`) && fs.statSync(`${path }.vbs`)?.isFile()) {
+
+					localIncludes.push([
+						`Import Statement ${virtualIncludePath}`,
+						new IncludeFile(`${path}.vbs`)
+					]);
+					break;
+
 				}
-			} else {
-				// Handle `virtual` include type. Determine absolute path by scanning through directory levels
 
-				const virtualIncludePath = match.groups?.filename.startsWith(pathns.sep)
-					? match.groups?.filename
-					: `${pathns.sep}${match.groups?.filename}`;
-				const directory = pathns.dirname(doc.uri.path);
-				const directoryLevels = directory.split(pathns.sep);
-
-				// Iterate through directory levels until top level is reached
-				while (directoryLevels.length > 1) {
-					// Construct path from current level
-					const virtualPath = pathns.normalize(
-						`${directoryLevels.join(pathns.sep)}${virtualIncludePath}`
-					);
-
-					// Check for file existence. If found add to `localIncludes` and break out of process
-					if (checkFileExistence(virtualPath)) {
-						localIncludes.push([
-							`Import Statement ${virtualIncludePath}`,
-							new IncludeFile(virtualPath),
-						]);
-
-						break;
-					}
-
-					// Remove the depest level then continue next iteration
-					directoryLevels.pop();
-				}
+				directories.pop();
 			}
 
-			processedMatches.push(match.groups?.filename.toLowerCase());
-		}
-	}
+      processedMatches.push(virtualIncludePath.toLowerCase());
+    }
+  }
 
-	return localIncludes;
-}
-
-// Checks is include file exists
-function checkFileExistence(path: string): boolean {
-	if (fs.existsSync(path) && fs.statSync(path)?.isFile()) return true;
-	if (fs.existsSync(`${path}.vbs`) && fs.statSync(`${path}.vbs`)?.isFile())
-		return true;
-
-	return false;
+  return localIncludes;
 }
